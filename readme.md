@@ -47,7 +47,7 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
     <tbody>
       <tr>
         <td><code>file</code></td>
-        <td><code>string</code> (binary)</td>
+        <td><code>file</code> (binary)</td>
         <td><strong>Yes</strong></td>
         <td>—</td>
         <td>Audio file stream to upload.</td>
