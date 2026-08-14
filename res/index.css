@@ -1,0 +1,44 @@
+.comment-box {
+    margin-top : 10px;
+    /* Targets the textarea directly inside the class */
+    >textarea {
+        width: 100%;
+        height: 120px;          /* Makes the textbox taller */
+        padding: 10px;           /* Adds the requested padding */
+        border: 1px solid #000000;
+        outline: none;
+        resize: vertical;
+        min-height: 50px;
+
+        /* Wrapping & Overflow Prevention */
+        white-space: normal;
+        overflow-wrap: break-word;
+        word-break: break-word;
+        box-sizing: border-box; /* Ensures padding doesn't break the 100% width */
+    }
+
+    /* Targets the div row directly inside the class */
+    > #submit {
+        display: flex;
+        justify-content: flex-end;
+        width: 100%;
+        padding-top: 10px;
+
+        /* Targets the button directly inside the #submit container */
+        >button {
+            font-size: 10px;
+            padding: 3px;
+            border-radius: 0;
+        }
+    }
+}
+
+.log-item {
+    padding: 8px;
+    margin: 4px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.highlight {
+    background-color: #e6f7ff;
+}

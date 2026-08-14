@@ -1,0 +1,26 @@
+:80 {
+    # Root directory for static files
+    root * ./site
+
+    # Reverse proxy API requests to local backend
+    # match requests starting with /python-inline and strip that prefix
+    handle_path /api/* {
+		reverse_proxy stemsplitter-api:8000
+	}
+
+    # Serve files from /res directory
+    handle_path /res/* {
+        root * /res
+        file_server
+    }
+
+    # Fallback for SPA (serve index.html for non-file paths)
+    @notFile {
+        not file
+    }
+
+    handle @notFile {
+        rewrite * /index.html
+        file_server
+    }
+}
