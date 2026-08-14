@@ -3,20 +3,17 @@ services:
     image: caddy:2.11-alpine
     container_name: caddy
     restart: unless-stopped
-    # Gives Caddy the permission to bind to low ports like 80/443 inside Linux environments
-    cap_add:
-      - NET_ADMIN
     ports:
-      - "8000:80"       # HTTP
-      - "443:443"     # HTTPS (TCP)
-      - "443:443/udp" # HTTP/3 / QUIC support (Highly Recommended)
+      - "${PORT}:80"       # HTTP
+
     volumes:
       # Mount your configuration file (read-only for security)
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # CRUCIAL: Persistent volumes for Let's Encrypt certificates and configuration state
       - /tmp/caddy_data:/data
       - /tmp/caddy_config:/config
-      - ${PWD}/res:/res
+    env_file:
+      - .env
 
 
   stemsplitter-api:
@@ -44,18 +41,36 @@ services:
     restart: "no"
     volumes:
       - ./src:/app:z
-      - /tmp/exports:/etc/exports:Z
-      - /tmp/models:/etc/models:Z
+      - /tmp/asep/exports:/etc/exports:Z
+      - /tmp/asep/models:/etc/models:Z
+    env_file:
+      - .env
 
     command: sh -c "rq worker audio-processing & hypercorn index:app --bind 0.0.0.0:8000 --reload"
+
+  php-demo:
+      image: dunglas/frankenphp:1.12.7-php8-alpine
+      container_name: php-demo
+      environment:
+        SERVER_NAME: ":80"
+        SERVER_ROOT: "/app/public"
+      volumes:
+            - ${PWD}/demo:/app/public/demo:z
+            - /tmp/caddy_data:/data:z
+            - /tmp/caddy_config:/config:z
+      env_file:
+        - .env
 
   redis:
     image: redis:alpine
     container_name: redis
     restart: unless-stopped
+    command: redis-server --save "" --appendonly no
     volumes:
       - /tmp/redis_data:/data
-    
+    env_file:
+      - .env
+
 
 
 

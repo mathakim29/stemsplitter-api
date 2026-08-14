@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Simple WaveSurfer.js Example</title>
+    <!-- Import WaveSurfer.js from whitelisted Cloudflare CDNjs -->
+    <script src="//unpkg.com/alpinejs" defer></script>
+    <link rel="stylesheet" href="index.css" />
+    
+  </head>
+  <body>
+    <form id="app-form" method="POST">
+      <div class="control-panel">
+        <input
+          type="file"
+          id="file-input"
+          name="file"
+          accept="audio/*"
+          required
+        />
+        <button type="submit" id="submit">Submit</button>
+      </div>
+      <select id="model-select" name="model" required>
+        <option value="" disabled selected>Select a model...</option>
+      </select>
+    </form>
+
+    <span id="result-container"></span>
+    <div id="waveform-container"></div>
+
+    <script src="index.js" type="module"></script>
+  </body>
+</html>
