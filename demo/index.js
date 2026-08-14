@@ -167,7 +167,7 @@ $("#app-form").on("submit", async function (e) {
         const r = await fetch(`/api/status/${data.id}`);
         if (!r.ok) throw new Error(`Status check failed: ${r.status}`);
         const d = await r.json();
-
+        
         if (d.progress === "finished") {
           stopPolling();
           $("#result-container").html("<p>Done!</p>");

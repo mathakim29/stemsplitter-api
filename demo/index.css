@@ -34,7 +34,7 @@ body {
 
 button {
   padding: 4px 8px;
-  background-color: #4f46e5;
+  background-color: #131314;
   color: white;
   border: none;
   border-radius: 3px;
@@ -44,7 +44,7 @@ button {
 
 a {
   padding: 4px 8px;
-  background-color: #4f46e5;
+  background-color: #131314;
   color: white;
   border: none;
   border-radius: 3px;
@@ -79,4 +79,13 @@ input[type="file"] {
 
 .controls-bar {
   margin-bottom: 1rem;
+}
+
+#app-form {
+    display: grid;       /* or display: grid; */
+    gap: 10px; 
+}
+
+#result-container {
+    margin-top: 10px;
 }

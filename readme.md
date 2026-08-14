@@ -26,9 +26,7 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 
 <p><strong>Base URL:</strong> <code>/api</code> | <strong>Version:</strong> <code>0.1.0</code></p>
 
-<hr>
-
-<h2>Endpoints</h2>
+<h3>Endpoints</h3>
 
 <!-- Endpoint 1 -->
 <details open>

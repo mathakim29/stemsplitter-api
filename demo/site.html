@@ -3,13 +3,18 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Simple WaveSurfer.js Example</title>
-    <!-- Import WaveSurfer.js from whitelisted Cloudflare CDNjs -->
+
+
+    <title>Stemsplitter Demo</title>
+
+
     <script src="//unpkg.com/alpinejs" defer></script>
     <link rel="stylesheet" href="index.css" />
     
   </head>
   <body>
+
+    <h3> Stemsplitter API Demo </h3>
     <form id="app-form" method="POST">
       <div class="control-panel">
         <input
@@ -21,12 +26,15 @@
         />
         <button type="submit" id="submit">Submit</button>
       </div>
+      <div style="display: flex;">
+      <span style="margin-right: 10px"> Model: </span>
       <select id="model-select" name="model" required>
         <option value="" disabled selected>Select a model...</option>
       </select>
+      </div>
     </form>
 
-    <span id="result-container"></span>
+    <div id="result-container"></div>
     <div id="waveform-container"></div>
 
     <script src="index.js" type="module"></script>
