@@ -10,8 +10,9 @@ services:
       # Mount your configuration file (read-only for security)
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       # CRUCIAL: Persistent volumes for Let's Encrypt certificates and configuration state
-      - /tmp/caddy_data:/data
-      - /tmp/caddy_config:/config
+      - /tmp/caddy_data:/data:z
+      - /tmp/caddy_config:/config:ro
+      - ./demo:/etc/demo:ro
     env_file:
       - .env
 
@@ -24,8 +25,6 @@ services:
         WORKDIR /app
         RUN pip install --no-cache-dir "fastapi[standard]" hypercorn uvloop httpx rq redis
         ENTRYPOINT []
-    env_file:
-      - .env
     environment:
       PYTHONPYCACHEPREFIX: /tmp/pycache
       REDIS_HOST: redis
@@ -47,19 +46,6 @@ services:
       - .env
 
     command: sh -c "rq worker audio-processing & hypercorn index:app --bind 0.0.0.0:8000 --reload"
-
-  php-demo:
-      image: dunglas/frankenphp:1.12.7-php8-alpine
-      container_name: php-demo
-      environment:
-        SERVER_NAME: ":80"
-        SERVER_ROOT: "/app/public"
-      volumes:
-            - ${PWD}/demo:/app/public/demo:z
-            - /tmp/caddy_data:/data:z
-            - /tmp/caddy_config:/config:z
-      env_file:
-        - .env
 
   redis:
     image: redis:alpine

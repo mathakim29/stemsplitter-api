@@ -1,42 +1,24 @@
 :80 {
-    # API: /api/foo -> stemsplitter-api:8000/foo
-    handle /api/* {
-    request_body {
-        max_size 100MB
-    }
-    reverse_proxy http://stemsplitter-api:8000 {
-        header_up Host {http.request.host}
-        header_up X-Real-IP {http.request.remote_host}
-        header_up X-Forwarded-For {http.request.remote_host}
-        header_up X-Forwarded-Proto {http.request.scheme}
-        transport http {
-            read_timeout 300s
-            write_timeout 300s
-        }
-    }
-}
-
-    # Block hidden/private files under /demo
-    handle /demo/_* {
-        respond "Access denied" 403
-    }
-
-    # PHP demo
-    # IMPORTANT: preserve /demo in the request URI.
     handle /demo/* {
-        reverse_proxy php-demo:80
+        uri strip_prefix /demo
+        root * /etc/demo
+        file_server
     }
 
-    # Redirect /demo -> /demo/
-    redir /demo /demo/ 308
-
-    # SPA fallback for everything else
-    handle {
-        @notFile {
-            not file
+    handle /api/* {
+        request_body {
+            max_size 100MB
         }
 
-        rewrite @notFile /index.html
-        file_server
+        reverse_proxy stemsplitter-api:8000 {
+            header_up Host {http.request.host}
+            header_up X-Real-IP {http.request.remote_host}
+            header_up X-Forwarded-For {http.request.remote_host}
+            header_up X-Forwarded-Proto {http.request.scheme}
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+            }
+        }
     }
 }

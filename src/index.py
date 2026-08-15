@@ -7,14 +7,13 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-
-
 from redis import Redis
 from rq import Queue
 from rq.job import Job
 from tasks import stemprocess
 
 app = FastAPI(root_path="/api")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
