@@ -1,18 +1,18 @@
 services:
-  caddy:
-    image: caddy:2.11-alpine
-    container_name: caddy
+
+  php-demo:
+    image: dunglas/frankenphp:latest-alpine 
+    container_name: frankenphp              
     restart: unless-stopped
     ports:
-      - "${PORT}:80"       # HTTP
-
-    volumes:
-      # Mount your configuration file (read-only for security)
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # CRUCIAL: Persistent volumes for Let's Encrypt certificates and configuration state
-      - /tmp/caddy_data:/data:z
-      - /tmp/caddy_config:/config:ro
+      - "${PORT}:80"                   
+    volumes:                          
       - ./demo:/etc/demo:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro    
+      - frankenphp_data:/data               # Line to modify: Persistent storage for TLS certificates
+      - frankenphp_config:/config           # Line to modify: Persistent storage for Caddy configurations
+    environment:
+      SERVER_NAME: ":80"                   
     env_file:
       - .env
 
@@ -57,6 +57,9 @@ services:
     env_file:
       - .env
 
+volumes:
+  frankenphp_data:
+  frankenphp_config:
 
 
 
