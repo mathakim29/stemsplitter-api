@@ -9,7 +9,7 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 ## Features
 
 * Choose from multiple separation architectures (VR, MDX, Demucs, MDXC) loaded on-the-fly.
-* Working demo under /demo/site.html
+* Working demo under /demo/index.php
 
 
 ## Quick Start
@@ -20,7 +20,7 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 
 > NOTE: See .env file for default settings, by default is 8000
 3. The API runs on localhost:8000/api
-3. Go to <a href="http://localhost:8000/demo/site.html">http://localhost:8000/demo/site.html</a> for demo app
+3. Go to <a href="http://localhost:8000/demo/index.php">http://localhost:8000/demo/index.php</a> for demo app
 
 ## API Reference
 
