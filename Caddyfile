@@ -1,23 +1,21 @@
 :80 {
-    handle /demo/* {
+    # route executes directives strictly in the order written
+    route /demo/* {
         uri strip_prefix /demo
         root * /etc/demo
         file_server
     }
 
-    handle /api/* {
+    route /api/* {
         request_body {
             max_size 100MB
         }
 
         reverse_proxy stemsplitter-api:8000 {
-            header_up Host {http.request.host}
-            header_up X-Real-IP {http.request.remote_host}
-            header_up X-Forwarded-For {http.request.remote_host}
-            header_up X-Forwarded-Proto {http.request.scheme}
+            header_up X-Real-IP {remote_host}
+
             transport http {
-                read_timeout 300s
-                write_timeout 300s
+                response_header_timeout 300s
             }
         }
     }

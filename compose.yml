@@ -1,20 +1,22 @@
 services:
-
-  php-demo:
-    image: dunglas/frankenphp:latest-alpine 
-    container_name: frankenphp              
-    restart: unless-stopped
+  caddy:
+    build: 
+      context: .
+      dockerfile_inline: |
+        FROM alpine:latest
+        RUN apk add caddy
+    container_name: caddy            
+    # restart: unless-stopped
     ports:
       - "${PORT}:80"                   
     volumes:                          
-      - ./demo:/etc/demo:ro
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro    
-      - frankenphp_data:/data               # Line to modify: Persistent storage for TLS certificates
-      - frankenphp_config:/config           # Line to modify: Persistent storage for Caddy configurations
+      - ./demo:/etc/demo:z
+      - ./Caddyfile:/etc/caddy/Caddyfile:z   
     environment:
       SERVER_NAME: ":80"                   
     env_file:
       - .env
+    command: caddy run --config /etc/caddy/Caddyfile
 
 
   stemsplitter-api:
@@ -26,8 +28,9 @@ services:
         RUN pip install --no-cache-dir "fastapi[standard]" hypercorn uvloop httpx rq redis
         ENTRYPOINT []
     environment:
-      PYTHONPYCACHEPREFIX: /tmp/pycache
       REDIS_HOST: redis
+      PYTHONPYCACHEPREFIX: /tmp/pycache
+      MODE: ${MODE}
     depends_on:
       - redis
     deploy:
@@ -45,21 +48,17 @@ services:
     env_file:
       - .env
 
-    command: sh -c "rq worker audio-processing & hypercorn index:app --bind 0.0.0.0:8000 --reload"
+    command: sh -c "rq worker audio-processing & hypercorn index:app --bind 0.0.0.0:8000 ${MODE:+$( [ "$MODE" = "DEV" ] && echo "--reload" )}"
 
   redis:
     image: redis:alpine
     container_name: redis
-    restart: unless-stopped
+    # restart: unless-stopped
     command: redis-server --save "" --appendonly no
     volumes:
       - /tmp/redis_data:/data
     env_file:
       - .env
-
-volumes:
-  frankenphp_data:
-  frankenphp_config:
 
 
 

@@ -2,6 +2,7 @@ import WaveSurfer from "https://cdn.jsdelivr.net/npm/wavesurfer.js@7/dist/wavesu
 import HoverPlugin from "https://unpkg.com/wavesurfer.js@7/dist/plugins/hover.esm.js";
 import $ from "https://esm.sh/cash-dom";
 import localforage from "https://cdn.jsdelivr.net/npm/localforage@1.10.0/+esm";
+import axios from "https://esm.sh/axios";
 
 let wavesurferInstances = [];
 let currentPollId = null;
@@ -16,10 +17,8 @@ const formatTime = (seconds) => {
 async function loadModels() {
   const selectEl = document.getElementById("model-select");
   try {
-    const response = await fetch("/api/list-models");
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const json = await response.json();
-    const models = json.output;
+    const response = await axios.get("/api/list-models");
+    const models = response.data.output;
 
     Object.keys(models).forEach((arch) => {
       const categoryGroup = models[arch];
@@ -34,7 +33,7 @@ async function loadModels() {
       });
     });
   } catch (err) {
-    console.error("Failed to fetch models:", err);
+    console.error("Failed to fetch models:", err.response || err.message || err);
     selectEl.innerHTML = '<option value="">Failed to load models</option>';
   }
 }
@@ -152,22 +151,17 @@ $("#app-form").on("submit", async function (e) {
   $("#result-container").html("Uploading...");
 
   try {
-    const response = await fetch("/api/upload/", {
-      method: "POST",
-      body: formData,
-    });
-    if (!response.ok) throw new Error("Network response error");
-
-    const data = await response.json();
+    const response = await axios.post("/api/upload/", formData);
+    const data = response.data;
+    
     $("#result-container").html(`Processing...`);
     await localforage.setItem("file-id", data.id);
 
     currentPollId = setInterval(async () => {
       try {
-        const r = await fetch(`/api/status/${data.id}`);
-        if (!r.ok) throw new Error(`Status check failed: ${r.status}`);
-        const d = await r.json();
-        
+        const r = await axios.get(`/api/status/${data.id}`);
+        const d = r.data;
+
         if (d.progress === "finished") {
           stopPolling();
           $("#result-container").html("<p>Done!</p>");
@@ -177,6 +171,7 @@ $("#app-form").on("submit", async function (e) {
           buildTracks(files);
         } else if (d.progress === "error") {
           stopPolling();
+          console.error("Job status returned an error state:", d);
           $("#result-container").append(
             `<p>Job failed: ${d.error || "unknown error"}</p>`,
           );
@@ -184,10 +179,12 @@ $("#app-form").on("submit", async function (e) {
         // else: still processing, keep polling
       } catch (pollErr) {
         stopPolling();
+        console.error("Polling request failed:", pollErr.response || pollErr.message || pollErr);
         $("#result-container").append(`<p>Polling error: ${pollErr.message}</p>`);
       }
     }, 2000);
   } catch (error) {
+    console.error("Upload request failed:", error.response || error.message || error);
     $("#result-container").text(`Error loading data: ${error.message}`);
   }
 });
