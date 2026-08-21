@@ -1,3 +1,16 @@
+:root {
+  color-scheme: light dark; /* Handles native scrollbars/form inputs automatically */
+  --bg-color: #ffffff;
+  --text-color: #333333;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #121212;
+    --text-color: #efefef;
+  }
+}
+
 body {
   font-family:
     system-ui,
@@ -6,9 +19,11 @@ body {
   max-width: 600px;
   margin: 40px auto;
   padding: 0 20px;
-  background-color: #f9fafb;
-  color: #111827;
+  background-color: var(--bg-color);
+  color: var(--text-color);
 }
+
+
 #waveform {
   background: #ffffff;
   border: 1px solid #e5e7eb;
@@ -40,6 +55,7 @@ button {
   border-radius: 3px;
   cursor: pointer;
   font-weight: 500;
+  border: 1px solid #808080;
 }
 
 a {
