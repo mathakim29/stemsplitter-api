@@ -7,6 +7,19 @@ import axios from "https://esm.sh/axios";
 let wavesurferInstances = [];
 let currentPollId = null;
 
+// polling purposes 
+setInterval(async () => {
+    try {
+        const response = await axios.get('/ping');
+        if (currentPollId == null) {
+          $('#result-container').text("Server is currently active");
+        }
+    } catch (error) {
+        // Modify this line: clears the body on network/server error
+        $('#result-container').text("Server disconnected");
+    }
+}, 2500);
+
 const formatTime = (seconds) => {
   const minutes = Math.floor(seconds / 60);
   const secs = Math.floor(seconds % 60);

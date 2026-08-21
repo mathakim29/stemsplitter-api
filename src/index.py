@@ -53,6 +53,10 @@ def get_last_lines():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
 
+@app.get("/ping")
+def check_status():
+    return {"status":"active"}
+
 @app.post("/upload/")
 async def upload_file(
     file: UploadFile = File(...),
