@@ -148,13 +148,13 @@ $("#app-form").on("submit", async function (e) {
   formData.append("file", fileInput.files[0]);
   formData.append("model", $("#model-select").val());
 
-  $("#result-container").html("Uploading...");
+  $("#result-container").text("Uploading...");
 
   try {
     const response = await axios.post("/api/upload/", formData);
     const data = response.data;
     
-    $("#result-container").html(`Processing...`);
+    $("#result-container").text(`Processing...`);
     await localforage.setItem("file-id", data.id);
 
     currentPollId = setInterval(async () => {
@@ -162,9 +162,14 @@ $("#app-form").on("submit", async function (e) {
         const r = await axios.get(`/api/status/${data.id}`);
         const d = r.data;
 
+        const get_log = await axios.get(`/api/log-pipe`);
+        const log_data = get_log.data;
+
+        $("#result-container").text(log_data.lines.join("\n"));
+
         if (d.progress === "finished") {
           stopPolling();
-          $("#result-container").html("<p>Done!</p>");
+          $("#result-container").text("Done!");
 
           const files = d.result?.output_files || [];
           await localforage.setItem("output-files", files);
@@ -172,15 +177,15 @@ $("#app-form").on("submit", async function (e) {
         } else if (d.progress === "error") {
           stopPolling();
           console.error("Job status returned an error state:", d);
-          $("#result-container").append(
-            `<p>Job failed: ${d.error || "unknown error"}</p>`,
+          $("#result-container").text(
+            `Job failed: ${d.error || "unknown error"}`,
           );
         }
         // else: still processing, keep polling
       } catch (pollErr) {
         stopPolling();
         console.error("Polling request failed:", pollErr.response || pollErr.message || pollErr);
-        $("#result-container").append(`<p>Polling error: ${pollErr.message}</p>`);
+        $("#result-container").text(`Polling error: ${pollErr.message}`);
       }
     }, 2000);
   } catch (error) {

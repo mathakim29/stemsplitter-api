@@ -4,17 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-
     <title>Stemsplitter Demo</title>
-
 
     <script src="//unpkg.com/alpinejs" defer></script>
     <link rel="stylesheet" href="index.css" />
-    
   </head>
   <body>
-
-    <h3> Stemsplitter API Demo </h3>
+    <h3>Stemsplitter API Demo</h3>
     <form id="app-form" method="POST">
       <div class="control-panel">
         <input
@@ -26,16 +22,17 @@
         />
         <button type="submit" id="submit">Submit</button>
       </div>
-      <div style="display: flex;">
-      <span style="margin-right: 10px"> Model: </span>
-      <select id="model-select" name="model" required>
-        <option value="" disabled selected>Select a model...</option>
-      </select>
+      <div style="display: flex">
+        <span style="margin-right: 10px"> Model: </span>
+        <select id="model-select" name="model" required>
+          <option value="" disabled selected>Select a model...</option>
+        </select>
       </div>
     </form>
 
-    <div id="result-container"></div>
-    <div id="waveform-container"></div>
+    <div>
+      <pre><code id="result-container"></code></pre>
+    </div>
 
     <script src="index.js" type="module"></script>
   </body>

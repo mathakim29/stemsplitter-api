@@ -102,7 +102,18 @@ input[type="file"] {
     gap: 10px; 
 }
 
+pre {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
 #result-container {
-    margin-top: 10px;
-    margin-bottom: 10px;
+    background-color: black;
+    border: 1px solid white;
+    color: yellow;
+    padding: 10px;
+    white-space: pre-wrap !important; 
+    display: block !important;
+    width: 96%;
+
 }

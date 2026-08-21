@@ -2,10 +2,12 @@ import shutil
 import uuid
 from pathlib import Path
 import json
+import os
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from collections import deque
 
 from redis import Redis
 from rq import Queue
@@ -32,6 +34,24 @@ UPLOAD_DIR = Path("/tmp/uploads")
 redis_conn = Redis(host="redis", port=6379, db=0)
 queue = Queue("audio-processing", connection=redis_conn)
 
+LOG_FILE_PATH = "/tmp/process.log"
+
+@app.get("/log-pipe")
+def get_last_lines():
+    # Check if the log file exists
+    if not os.path.exists(LOG_FILE_PATH):
+        raise HTTPException(status_code=404, detail="Log file not found.")
+    
+    try:
+        # deque with maxlen=3 keeping only the last 3 lines in memory
+        with open(LOG_FILE_PATH, "r", encoding="utf-8") as f:
+            last_three_lines = deque(f, maxlen=1)
+        
+        # Clean up newline characters and return as a list
+        return {"lines": [line.strip() for line in last_three_lines]}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
 
 @app.post("/upload/")
 async def upload_file(
