@@ -1,10 +1,8 @@
 services:
   caddy:
     build: 
-      context: .
-      dockerfile_inline: |
-        FROM alpine:latest
-        RUN apk add caddy
+      context: dockerfile
+      dockerfile: caddy.df
     container_name: caddy            
     # restart: unless-stopped
     ports:
@@ -21,12 +19,8 @@ services:
 
   stemsplitter-api:
     build:
-      context: .
-      dockerfile_inline: |
-        FROM beveradb/audio-separator:gpu-0.44.5
-        WORKDIR /app
-        RUN pip install --no-cache-dir "fastapi[standard]" hypercorn uvloop httpx rq redis
-        ENTRYPOINT []
+      context: dockerfile
+      dockerfile: stemsplitter.df
     environment:
       REDIS_HOST: redis
       PYTHONPYCACHEPREFIX: /tmp/pycache

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>GIF Brush in Konva</title>
+<script src="https://unpkg.com/konva@9/konva.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/buzzfeed/libgif-js@master/libgif.js"></script>
+</head>
+<body>
+<!-- SuperGif needs a real <img> in the DOM to load from; keep it hidden -->
+<img id="gif-source" src="https://yokai.crd.co/assets/images/gallery05/0126cee3.gif?v=b4df531c" style="display:none;" rel:animated_src="https://yokai.crd.co/assets/images/gallery05/0126cee3.gif?v=b4df531c" />
+
+<div id="container"></div>
+<p id="status">Loading gif frames...</p>
+
+<script>
+const stage = new Konva.Stage({ container: 'container', width: 800, height: 600 });
+const layer = new Konva.Layer();
+stage.add(layer);
+
+let frameImages = [];
+let frameIndex = 0;
+let drawing = false;
+
+// 1. Use libgif-js to step through every frame deterministically
+function loadGifFrames() {
+  return new Promise((resolve) => {
+    const gifImg = document.getElementById('gif-source');
+    const superGif = new SuperGif({ gif: gifImg });
+
+    superGif.load(() => {
+      const frameCount = superGif.get_length();
+      const frames = [];
+
+      for (let i = 0; i < frameCount; i++) {
+        superGif.move_to(i);                 // render frame i onto its internal canvas
+        const srcCanvas = superGif.get_canvas();
+
+        // snapshot into its own canvas so later frames don't overwrite it
+        const canvas = document.createElement('canvas');
+        canvas.width = srcCanvas.width;
+        canvas.height = srcCanvas.height;
+        canvas.getContext('2d').drawImage(srcCanvas, 0, 0);
+
+        const img = new Image();
+        img.src = canvas.toDataURL();
+        frames.push(img);
+      }
+
+      resolve(frames);
+    });
+  });
+}
+
+// 2. Stamp a frame at the pointer position
+function stampBrush(pos) {
+  if (frameImages.length === 0) return;
+  const img = frameImages[frameIndex % frameImages.length];
+  frameIndex++;
+
+  const stamp = new Konva.Image({
+    image: img,
+    x: pos.x - 20,
+    y: pos.y - 20,
+    width: 40,
+    height: 40,
+    rotation: Math.random() * 360,
+  });
+  layer.add(stamp);
+  layer.batchDraw();
+}
+
+// 3. Wire up drawing
+stage.on('mousedown', () => { drawing = true; stampBrush(stage.getPointerPosition()); });
+stage.on('mouseup', () => drawing = false);
+stage.on('mousemove', () => { if (drawing) stampBrush(stage.getPointerPosition()); });
+
+// 4. Load frames, then enable drawing
+loadGifFrames().then(imgs => {
+  frameImages = imgs;
+  document.getElementById('status').textContent =
+    `Loaded ${imgs.length} frames — draw to paint!`;
+});
+</script>
+</body>
+</html>

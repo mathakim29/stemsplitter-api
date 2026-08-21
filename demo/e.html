@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+  <body>
+    <!-- Action controls -->
+    <div style="margin-bottom: 10px;">
+      <button id="groupBtn">Group (g1)</button>
+      <button id="ungroupBtn">Ungroup (g1)</button>
+    </div>
+
+    <!-- Container for the canvas -->
+    <div
+      id="container"
+      style="width: 800px; height: 600px; border: 1px solid #000000"
+    ></div>
+
+    <!-- Load library via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/pikaso@latest/umd/pikaso.min.js"></script>
+
+    <script>
+      const editor = new Pikaso({
+        container: document.querySelector("#container"),
+
+        selection: {
+          transformer: {
+            borderStroke: "blue",
+            borderStrokeWidth: 2,
+            borderDash: [5, 5],
+            anchorStroke: "darkblue",
+            anchorStrokeWidth: 1,
+            anchorSize: 8,
+            anchorCornerRadius: 0,
+            rotationHandleOffset: 30,
+            rotationHandleStroke: "blue",
+            rotationHandleFill: "white",
+          },
+          zone: {
+            fill: "#7785ef92",
+            stroke: "#9494afff",
+          },
+        },
+
+        measurement: {
+          background: {
+            fill: "purple",
+            cornerRadius: 5,
+          },
+          text: {
+            fill: "#fff",
+            padding: 5,
+            fontSize: 14,
+            fontStyle: "bold",
+          },
+        },
+      });
+
+      const c1 = editor.shapes.circle.insert({
+        radius: 100,
+        x: 150,
+        y: 150,
+        fill: "tomato",
+      });
+
+      const c2 = editor.shapes.circle.insert({
+        radius: 100,
+        x: 350,
+        y: 150,
+        fill: "royalblue",
+      });
+
+      // Group using board.groups or property assignment
+      document.querySelector("#groupBtn").addEventListener("click", () => {
+        editor.board.groups.attach([c1, c2], 'g1');
+        // Alternative selection-based syntax:
+        // editor.board.selection.group('g1');
+      });
+
+      // Ungroup using board.groups.ungroup
+      document.querySelector("#ungroupBtn").addEventListener("click", () => {
+        editor.board.groups.ungroup('g1');
+      });
+
+      editor.on("selection:dragend", (data) => {
+        console.log("dragend:", data);
+      });
+
+      editor.on("selection:change", (event) => {
+        const attrs = event.shapes[0]?.node.attrs;
+        console.log("selected:", attrs);
+      });
+
+      
+    </script>
+  </body>
+</html>

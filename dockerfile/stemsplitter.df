@@ -1,0 +1,4 @@
+FROM beveradb/audio-separator:gpu-0.44.5
+WORKDIR /app
+RUN pip install --no-cache-dir "fastapi[standard]" hypercorn uvloop httpx rq redis
+ENTRYPOINT []
