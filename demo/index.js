@@ -7,6 +7,14 @@ import axios from "https://esm.sh/axios";
 let wavesurferInstances = [];
 let currentPollId = null;
 
+window.addEventListener('beforeunload', (event) => {
+    // Standard requires preventDefault() to be called
+    event.preventDefault();
+    
+    // Chrome requires returnValue to be set
+    event.returnValue = '';
+});
+
 // polling purposes 
 setInterval(async () => {
     try {
