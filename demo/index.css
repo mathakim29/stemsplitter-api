@@ -56,7 +56,6 @@ button {
   cursor: pointer;
   font-weight: 500;
   border: 1px solid #808080;
-  margin-left: 10px;
 }
 
 a {
@@ -124,4 +123,8 @@ pre {
     width: 100%;
     box-sizing: border-box;
     overflow: visible; /* Allows the browser to scroll the text internally as you type */
+}
+
+#submit {
+  width: 100%;
 }

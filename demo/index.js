@@ -1,64 +1,63 @@
 import WaveSurfer from "https://cdn.jsdelivr.net/npm/wavesurfer.js@7/dist/wavesurfer.esm.js";
 import HoverPlugin from "https://unpkg.com/wavesurfer.js@7/dist/plugins/hover.esm.js";
 import $ from "https://esm.sh/cash-dom";
-import localforage from "https://cdn.jsdelivr.net/npm/localforage@1.10.0/+esm";
 import axios from "https://esm.sh/axios";
 
-let wavesurferInstances = [];
-let currentPollId = null;
+// import localforage from "https://cdn.jsdelivr.net/npm/localforage@1.10.0/+esm";
 
-window.addEventListener('beforeunload', (event) => {
-    // Standard requires preventDefault() to be called
-    event.preventDefault();
-    
-    // Chrome requires returnValue to be set
-    event.returnValue = '';
+const api = axios.create({ timeout: 10000 }); // 10s timeout fixes hangs
+
+let wavesurferInstances = [];
+let pollTimer = null;
+let abortCtrl = null;   // cancels stale requests
+let isSubmitting = false;
+
+const setCookie = (name, value, days = 7) => {
+  document.cookie = `${name}=${encodeURIComponent(value)};expires=${new Date(Date.now() + days * 864e5).toUTCString()};path=/;SameSite=Lax`;
+};
+const getCookie = (name) => document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))?.[1] ? decodeURIComponent(RegExp.$1) : null;
+const deleteCookie = (name) => (document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`);
+
+window.addEventListener("beforeunload", (e) => {
+  if (isSubmitting) e.preventDefault();
 });
 
-// polling purposes 
+// heartbeat
 setInterval(async () => {
-    try {
-        const response = await axios.get('/ping');
-        if (currentPollId == null) {
-          $('#result-container').text("Server is currently active");
-        }
-    } catch (error) {
-        // Modify this line: clears the body on network/server error
-        $('#result-container').text("Server disconnected");
-    }
+  try {
+    await api.get("/ping");
+    if (!pollTimer) $("#result-container").text("Server is currently active");
+  } catch {
+    $("#result-container").text("Server disconnected");
+  }
 }, 2500);
 
-const formatTime = (seconds) => {
-  const minutes = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  const millis = Math.floor((seconds % 1) * 100);
-  return `${minutes.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${millis.toString().padStart(2, "0")}`;
+const formatTime = (s) => {
+  const pad = (n) => Math.floor(n).toString().padStart(2, "0");
+  return `${pad(s / 60)}:${pad(s % 60)}.${pad((s % 1) * 100)}`;
 };
 
-async function loadModels() {
-  const selectEl = document.getElementById("model-select");
-  try {
-    const response = await axios.get("/api/list-models");
-    const models = response.data.output;
+const errMsg = (err) => err.response?.data?.error || err.response?.data?.["stack-trace"] || err.message;
 
-    Object.keys(models).forEach((arch) => {
-      const categoryGroup = models[arch];
-      Object.keys(categoryGroup).forEach((modelKey) => {
-        const filename = categoryGroup[modelKey].filename;
-        if (filename) {
-          const option = document.createElement("option");
-          option.value = filename;
-          option.textContent = filename;
-          selectEl.appendChild(option);
-        }
+async function loadModels() {
+  const sel = document.getElementById("model-select");
+  try {
+    const { data } = await api.get("/api/list-models");
+
+    Object.values(data?.output || {})
+      .flatMap((group) => Object.entries(group))
+      .filter(([name]) => !name.includes("VIP"))
+      .forEach(([name, m]) => {
+        // new Option(text, value)
+        sel.appendChild(new Option(name, name));
+
+        // Note: Use new Option(name, m.filename) if your backend still requires the filename as the selected value.
       });
-    });
   } catch (err) {
-    console.error("Failed to fetch models:", err.response || err.message || err);
-    selectEl.innerHTML = '<option value="">Failed to load models</option>';
+    console.error("Failed to fetch models:", errMsg(err));
+    sel.innerHTML = '<option value="">Failed to load models</option>';
   }
 }
-
 loadModels();
 
 function cleanupTracks() {
@@ -68,149 +67,260 @@ function cleanupTracks() {
 }
 
 function stopPolling() {
-  if (currentPollId !== null) {
-    clearInterval(currentPollId);
-    currentPollId = null;
-  }
+  clearInterval(pollTimer);
+  pollTimer = null;
+  abortCtrl?.abort();
+  abortCtrl = null;
 }
 
-function buildTracks(files) {
+function buildTracks(files, originalName, videoTitle = null) {
   cleanupTracks();
+  if (!files.length) return;
 
-  if (files.length > 0) {
-    $("#waveform-container").append(`
-      <div class="controls-bar">
-        <button id="play-all-btn">Play All</button>
-        <button id="stop-all-btn">Stop All</button>
-      </div>
-    `);
-  }
+  $("#waveform-container").append(`
+    <div class="controls-bar">
+      <button id="play-all-btn">Play All</button>
+      <button id="stop-all-btn">Stop All</button>
+    </div>
+  `);
 
-  files.forEach((file, index) => {
-    const trackId = `waveform-${index}`;
-    const timeId = `time-${index}`;
-    const displayName = file.replace(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_?/,
-      "",
-    );
+  files.forEach((file, i) => {
+    // Extract stem name from filename (removes UUID prefix)
+    const stem = file.replace(/^[0-9a-f-]{36}_?/, "");
+    // Use video title if available, otherwise use original filename
+    let displayName = stem;
+    if (videoTitle) {
+      // Remove file extension from video title if present
+      const cleanTitle = videoTitle.replace(/\.[^/.]+$/, "");
+    } else if (originalName) {
+      const cleanName = originalName.replace(/\.[^/.]+$/, "");
+    }
+    displayName = `${stem}`;
 
     $("#waveform-container").append(`
       <div class="stem-player">
-        <span id="${timeId}" class="time-display">00:00.00</span>
-        <h4>${displayName}</h4>
-        <div id="${trackId}"></div>
-        <button id="btn-${index}">Play / Pause</button>
-        <a href='/api/exports/${file}'>Download</a>
+        <span id="time-${i}" class="time-display">00:00.00</span>
+        <h4 title="${displayName}">${displayName.length > 50 ? displayName.substring(0, 47) + '...' : displayName}</h4>
+        <div id="waveform-${i}"></div>
+        <button id="btn-${i}">Play / Pause</button>
+        <a href='/api/exports/${file}' download>Download</a>
       </div>
     `);
 
     const ws = WaveSurfer.create({
-      container: `#${trackId}`,
+      container: `#waveform-${i}`,
       waveColor: "#4F4A85",
       progressColor: "#383351",
       url: `/api/exports/${file}`,
-      plugins: [
-        HoverPlugin.create({
-          lineColor: "#ff0000",
-          lineWidth: 2,
-          labelBackground: "#555",
-          labelColor: "#fff",
-          labelSize: "11px",
-        }),
-      ],
+      plugins: [HoverPlugin.create({ lineColor: "#ff0000", lineWidth: 2, labelBackground: "#555", labelColor: "#fff", labelSize: "11px" })],
     });
 
-    ws.on("timeupdate", (currentTime) => {
-      $(`#${timeId}`).text(formatTime(currentTime));
-    });
-
-    ws.on("error", (err) => {
-      console.error(`WaveSurfer error on ${file}:`, err);
-    });
-
-    $(`#btn-${index}`).on("click", () => ws.playPause());
+    ws.on("timeupdate", (t) => $(`#time-${i}`).text(formatTime(t)));
+    ws.on("error", (err) => console.error(`WaveSurfer error on ${file}:`, err));
+    $(`#btn-${i}`).on("click", () => ws.playPause());
     wavesurferInstances.push(ws);
   });
 
-  // Play/Pause All: toggles based on whether ALL are playing
   $("#play-all-btn").on("click", () => {
-    const allPlaying =
-      wavesurferInstances.length > 0 &&
-      wavesurferInstances.every((ws) => ws.isPlaying());
-
-    wavesurferInstances.forEach((ws) => {
-      allPlaying ? ws.pause() : ws.play();
-    });
+    const allPlaying = wavesurferInstances.every((ws) => ws.isPlaying());
+    wavesurferInstances.forEach((ws) => (allPlaying ? ws.pause() : ws.play()));
     $("#play-all-btn").text(allPlaying ? "Play All" : "Pause All");
   });
 
-  // Stop All: pause + reset playhead to 0
   $("#stop-all-btn").on("click", () => {
-    wavesurferInstances.forEach((ws) => {
-      ws.pause();
-      ws.seekTo(0);
-    });
+    wavesurferInstances.forEach((ws) => { ws.pause(); ws.seekTo(0); });
     $("#play-all-btn").text("Play All");
   });
 }
 
+async function handleFinished(data) {
+  stopPolling();
+  $("#result-container").text("Done! (Job completed)");
+  const files = data?.result?.output_files || [];
+  const originalName = data?.result.original_filename || null;
+  const videoTitle = data?.result.video_title || null;
+
+
+  // Display video info if available
+  if (videoTitle) {
+    $("#result-container").html(`Done! (Job completed)<br><strong>Video:</strong> ${videoTitle}`);
+  }
+
+  $("#track-title").text(videoTitle);
+  $("#track-sub").text(data?.result.file_id);
+
+  buildTracks(files, originalName, videoTitle);
+  isSubmitting = false;
+}
+
+function pollJobStatus(jobId) {
+  stopPolling();
+  abortCtrl = new AbortController();
+  const { signal } = abortCtrl;
+
+  pollTimer = setInterval(async () => {
+    try {
+      const [statusRes, logRes] = await Promise.all([
+        api.get(`/api/status/${jobId}`, { signal }),
+        api.get(`/api/log-pipe?job_id=${jobId}`, { signal }), // scoped to job now
+      ]);
+
+      const progress = statusRes.data?.progress;
+      const logLines = logRes.data?.lines || [];
+
+      // Show latest log lines
+      const logDisplay = logLines.slice(-3).join("\n"); // Show last 3 lines
+      const videoTitle = statusRes.data?.video_title || '';
+
+      let statusText = logDisplay || "Processing...";
+      if (videoTitle) {
+        statusText = `🎵 ${videoTitle}\n${statusText}`;
+      }
+      $("#result-container").text(statusText);
+
+      if (progress === "finished") {
+        await handleFinished(statusRes.data);
+      } else if (progress === "failed" || progress === "error") {
+        stopPolling();
+        $("#result-container").text(`Job failed: ${statusRes.data?.error || "unknown error"}`);
+        isSubmitting = false;
+      }
+    } catch (err) {
+      if (axios.isCancel(err)) return; // ignore aborted/stale requests
+      stopPolling();
+      console.error("Polling request failed:", err);
+      $("#result-container").text(`Polling error: ${errMsg(err)}`);
+      isSubmitting = false;
+    }
+  }, 2000);
+}
+
+async function restoreJobFromCookie() {
+  const jobId = getCookie("jobId");
+  if (!jobId) return;
+
+  try {
+    const { data } = await api.get(`/api/status/${jobId}`);
+    if (data?.progress === "finished") {
+      $("#result-container").text(`Resuming completed job ${jobId}`);
+      await handleFinished(data);
+    } else if (data?.progress === "failed" || data?.progress === "error") {
+      $("#result-container").text(`Job failed: ${data?.error || "unknown error"}`);
+    } else {
+      const videoTitle = data?.video_title || '';
+      const statusText = videoTitle ? `🎵 ${videoTitle}\nResuming monitoring...` : `Resuming monitoring of job ${jobId}...`;
+      $("#result-container").text(statusText);
+      pollJobStatus(jobId);
+    }
+  } catch (err) {
+    console.error("Failed to restore job:", err);
+    $("#result-container").text(`Failed to restore job: ${errMsg(err)}`);
+  }
+}
+document.addEventListener("DOMContentLoaded", restoreJobFromCookie);
+
+// Add visual feedback for URL input
+$("#yt-dlp-url").on("input", function () {
+  const url = $(this).val().trim();
+  const fileInput = document.getElementById("file-input");
+
+  if (url) {
+    // Show loading indicator for URL
+    $(".url-status").remove();
+    // $(this).after('<span class="url-status" style="margin-left: 10px; color: #666;">🔗 YouTube URL detected</span>');
+
+    // Optionally fetch video title preview
+    if (url.includes("youtube.com") || url.includes("youtu.be")) {
+      fetchVideoPreview(url);
+    }
+  } else {
+    $(".url-status").remove();
+  }
+});
+
+async function fetchVideoPreview(url) {
+  try {
+    const { data } = await api.post("/api/preview", { url });
+    if (data?.title) {
+      $(".url-status").text(`🎵 ${data.title}`);
+    }
+  } catch (err) {
+    // Silently fail - just use URL
+  }
+}
+
+
+// submit function 
 $("#app-form").on("submit", async function (e) {
   e.preventDefault();
+  isSubmitting = true;
 
   const fileInput = document.getElementById("file-input");
-  if (!fileInput.files.length) {
-    $("#result-container").text("Please choose a file first.");
+  const fileSelected = fileInput?.files.length > 0;
+  const urlValue = $("#yt-dlp-url").val()?.trim();
+
+  if (!fileSelected && !urlValue) {
+    $("#result-container").text("Please provide either a local audio file or a video URL.");
+    isSubmitting = false;
     return;
   }
 
   stopPolling();
+  deleteCookie("jobId");
+  cleanupTracks();
 
   const formData = new FormData();
-  formData.append("file", fileInput.files[0]);
-  formData.append("model", $("#model-select").val());
+  const model = $("#model-select").val();
+  if (!model) {
+    $("#result-container").text("Please select a model.");
+    isSubmitting = false;
+    return;
+  }
+  formData.append("model", model);
 
-  $("#result-container").text("Uploading...");
+  if (urlValue) {
+    formData.append("url", urlValue);
+    $("#result-container").text("🎵 Fetching best audio from YouTube...");
+  } else {
+    formData.append("file", fileInput.files[0]);
+    $("#result-container").text("📁 Uploading audio file...");
+  }
 
   try {
-    const response = await axios.post("/api/upload/", formData);
-    const data = response.data;
-    
-    $("#result-container").text(`Processing...`);
-    await localforage.setItem("file-id", data.id);
-
-    currentPollId = setInterval(async () => {
-      try {
-        const r = await axios.get(`/api/status/${data.id}`);
-        const d = r.data;
-
-        const get_log = await axios.get(`/api/log-pipe`);
-        const log_data = get_log.data;
-
-        $("#result-container").text(log_data.lines.join("\n"));
-
-        if (d.progress === "finished") {
-          stopPolling();
-          $("#result-container").text("Done!");
-
-          const files = d.result?.output_files || [];
-          await localforage.setItem("output-files", files);
-          buildTracks(files);
-        } else if (d.progress === "error") {
-          stopPolling();
-          console.error("Job status returned an error state:", d);
-          $("#result-container").text(
-            `Job failed: ${d.error || "unknown error"}`,
-          );
+    const { data } = await api.post("/api/upload/", formData, {
+      timeout: 60000, // longer timeout for uploads
+      onUploadProgress: (progressEvent) => {
+        const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        if (urlValue) {
+          $("#result-container").text(`🎵 Downloading audio... ${percent}%`);
+        } else {
+          $("#result-container").text(`📁 Uploading... ${percent}%`);
         }
-        // else: still processing, keep polling
-      } catch (pollErr) {
-        stopPolling();
-        console.error("Polling request failed:", pollErr.response || pollErr.message || pollErr);
-        $("#result-container").text(`Polling error: ${pollErr.message}`);
       }
-    }, 2000);
-  } catch (error) {
-    console.error("Upload request failed:", error.response || error.message || error);
-    $("#result-container").text(`Error loading data: ${error.message}`);
+    });
+
+    if (data?.status === "error") {
+      $("#result-container").text(`Error: ${data["stack-trace"] || "Submission error"}`);
+      isSubmitting = false;
+      return;
+    }
+
+    const jobId = data?.id;
+    const videoTitle = data?.video_title || null;
+    // const file_id = data?.result.file_id || null;
+
+
+    setCookie("jobId", jobId, 7);
+
+
+    const statusText = videoTitle
+      ? `🎵 ${videoTitle}\nQueued... Job ID: ${jobId}`
+      : `Queued... Job ID: ${jobId}`;
+    $("#result-container").text(statusText);
+    pollJobStatus(jobId);
+  } catch (err) {
+    console.error("Upload request failed:", err);
+    $("#result-container").text(`Error submitting data: ${errMsg(err)}`);
+    isSubmitting = false;
   }
 });

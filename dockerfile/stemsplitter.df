@@ -1,4 +1,11 @@
-FROM beveradb/audio-separator:gpu-0.44.5
+FROM beveradb/audio-separator:gpu
 WORKDIR /app
-RUN pip install --no-cache-dir "fastapi[standard]" hypercorn uvloop httpx rq redis
+
+RUN pip install --no-cache-dir "fastapi[standard]" hypercorn uvloop httpx huey[redis]
+
+RUN apt-get update && apt-get install -y wget 
+
+RUN wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp
+
 ENTRYPOINT []

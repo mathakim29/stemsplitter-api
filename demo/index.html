@@ -5,9 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
     <title>Stemsplitter Demo</title>
-    
 
     <link rel="stylesheet" href="index.css" />
+
+    <script type="importmap">
+      {
+        "imports": {
+          "es-toolkit": "https://esm.sh/es-toolkit@1.51.0"
+        }
+      }
+    </script>
+    <script src="index.js" type="module"></script>
   </head>
   <body>
     <h3>Stemsplitter API Demo</h3>
@@ -18,14 +26,21 @@
           id="file-input"
           name="file"
           accept="audio/*"
-          required
         />
       </div>
+      <div style="display: flex">
+        <span style="margin-right: 10px"> Url: </span>
+        <input id="yt-dlp-url" style="width: 100%" />
+      </div>
+
       <div style="display: flex">
         <span style="margin-right: 10px"> Model: </span>
         <select id="model-select" name="model" required>
           <option value="" disabled selected>Select a model...</option>
         </select>
+      </div>
+
+      <div style="display: flex">
         <button type="submit" id="submit">Submit</button>
       </div>
     </form>
@@ -33,8 +48,11 @@
     <div>
       <pre><code id="result-container"></code></pre>
     </div>
-    <code id="waveform-container"></code>
 
-    <script src="index.js" type="module"></script>
+    <div>
+      <span id="track-title"></span>
+      <span id="track-sub"></span>
+    </div>
+    <code id="waveform-container"></code>
   </body>
 </html>
