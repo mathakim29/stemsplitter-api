@@ -49,7 +49,7 @@ async function loadModels() {
       .filter(([name]) => !name.includes("VIP"))
       .forEach(([name, m]) => {
         // new Option(text, value)
-        sel.appendChild(new Option(name, name));
+        sel.appendChild(new Option(name, m.filename));
 
         // Note: Use new Option(name, m.filename) if your backend still requires the filename as the selected value.
       });
