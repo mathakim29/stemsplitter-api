@@ -1,58 +1,106 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Separator Stems Player</title>
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- Scripts -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/hover.min.js"></script>
+</head>
+<body>
 
-    <title>Stemsplitter Demo</title>
+    <div class="container" x-data="app" x-init="initApp">
+        <!-- API Separation Control -->
+        <div class="section">
+            <h3>Separate Audio</h3>
+            
+             <!-- Job History (Cookies) -->
+            <div class="section" x-show="savedJobs.length > 0" x-cloak>
+                <label>Load Previous Job:</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <select x-model="selectedHistoryJob">
+                        <option value="">-- Select a past job --</option>
+                        <template x-for="job in savedJobs" :key="job.jobId">
+                            <option :value="job.jobId" x-text="'Job: ' + job.jobId + ' (' + job.outputs.length + ' tracks)'"></option>
+                        </template>
+                    </select>
+                    <button @click="loadSavedJob" class="btn-secondary">Load</button>
+                </div>
+            </div>
 
-    <link rel="stylesheet" href="index.css" />
+            <label>Source Type:</label>
+            <div class="input-toggle-group">
+                <label><input type="radio" value="url" x-model="inputType"> Audio URL</label>
+                <label><input type="radio" value="file" x-model="inputType"> Upload File</label>
+            </div>
 
-    <script type="importmap">
-      {
-        "imports": {
-          "es-toolkit": "https://esm.sh/es-toolkit@1.51.0"
-        }
-      }
-    </script>
-    <script src="index.js" type="module"></script>
-  </head>
-  <body>
-    <h3>Stemsplitter API Demo</h3>
-    <form id="app-form" method="POST">
-      <div class="control-panel">
-        <input
-          type="file"
-          id="file-input"
-          name="file"
-          accept="audio/*"
-        />
-      </div>
-      <div style="display: flex">
-        <span style="margin-right: 10px"> Url: </span>
-        <input id="yt-dlp-url" style="width: 100%" />
-      </div>
+            <div x-show="inputType === 'url'" style="margin-top: 0.5rem;">
+                <input type="text" x-model="audioUrl" placeholder="https://www.youtube.com/watch?v=...">
+            </div>
 
-      <div style="display: flex">
-        <span style="margin-right: 10px"> Model: </span>
-        <select id="model-select" name="model" required>
-          <option value="" disabled selected>Select a model...</option>
-        </select>
-      </div>
+            <div x-show="inputType === 'file'" style="margin-top: 0.5rem;">
+                <input type="file" @change="file = $event.target.files[0]">
+            </div>
+            
+            <label>Select Model:</label>
+            <select x-model="selectedModel">
+                <template x-for="(models, category) in availableModels" :key="category">
+                    <optgroup :label="category">
+                        <template x-for="(filename, label) in models" :key="filename">
+                            <option :value="filename" x-text="label"></option>
+                        </template>
+                    </optgroup>
+                </template>
+            </select>
 
-      <div style="display: flex">
-        <button type="submit" id="submit">Submit</button>
-      </div>
-    </form>
+            <button @click="startSeparation" style="margin-top: 1rem;" :disabled="isProcessing">
+                <span x-text="isProcessing ? 'Processing (' + jobStatus + ' - ' + progress + '%)' : 'Start Separation'"></span>
+            </button>
 
-    <div>
-      <pre><code id="result-container"></code></pre>
+            <!-- Server Error Display Panel -->
+            <div x-show="errorMessage" x-cloak class="error-panel">
+                <strong>Error:</strong> <span x-text="errorMessage"></span>
+            </div>
+        </div>
+
+        <!-- Global Controls & Outputs -->
+        <div x-show="outputs.length > 0" x-cloak>
+            <div class="global-controls section">
+                <button @click="playAll">Play All</button>
+                <button @click="pauseAll" class="btn-secondary">Pause All</button>
+                <button @click="resetAll" class="btn-secondary">Reset All</button>
+                <div style="flex-grow: 1;"></div>
+                <button @click="downloadAll">Download All</button>
+            </div>
+
+            <!-- Render Separated Stems Dynamically -->
+            <template x-for="(filename, index) in outputs" :key="index">
+                <div class="track-card">
+                    <div class="header-top">
+                        <div class="track-title" x-text="filename"></div>
+                        <button @click="downloadTrack(filename)" class="btn-secondary" style="padding: 0.2rem 0.5rem;">Download</button>
+                    </div>
+                    
+                    <div class="header-top">
+                        <button @click="togglePlay(index)" x-text="playingStates[index] ? 'Pause' : 'Play'"></button>
+                        <div class="timer">
+                            <span x-text="formatTime(currentTimes[index] || 0)"></span> / <span x-text="formatTime(durations[index] || 0)"></span>
+                        </div>
+                    </div>
+
+                    <!-- Unique waveform container per stem -->
+                    <div :id="'waveform-' + index" x-init="$nextTick(() => initWaveform(index, filename))"></div>
+                </div>
+            </template>
+        </div>
+
     </div>
 
-    <div>
-      <span id="track-title"></span>
-      <span id="track-sub"></span>
-    </div>
-    <code id="waveform-container"></code>
-  </body>
+    <!-- Separate JS File -->
+    <script src="index.js"></script>
+</body>
 </html>

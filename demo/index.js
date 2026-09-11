@@ -1,326 +1,278 @@
-import WaveSurfer from "https://cdn.jsdelivr.net/npm/wavesurfer.js@7/dist/wavesurfer.esm.js";
-import HoverPlugin from "https://unpkg.com/wavesurfer.js@7/dist/plugins/hover.esm.js";
-import $ from "https://esm.sh/cash-dom";
-import axios from "https://esm.sh/axios";
+document.addEventListener('alpine:init', () => {
+    Alpine.data('app', () => ({
+        inputType: 'url',
+        file: null,
+        audioUrl: 'https://www.youtube.com/watch?v=B9WsjlqjYjg',
+        
+        availableModels: {},
+        selectedModel: 'UVR-MDX-NET-Inst_HQ_3.onnx',
+        
+        isProcessing: false,
+        jobId: null,
+        jobStatus: 'idle',
+        progress: 0,
+        errorMessage: '',
+        outputs: [],
+        
+        wavesurferInstances: [],
+        playingStates: {},
+        currentTimes: {},
+        durations: {},
 
-// import localforage from "https://cdn.jsdelivr.net/npm/localforage@1.10.0/+esm";
+        savedJobs: [],
+        selectedHistoryJob: '',
 
-const api = axios.create({ timeout: 10000 }); // 10s timeout fixes hangs
+        async initApp() {
+            await this.loadCookies();
+            await this.fetchModels();
+        },
 
-let wavesurferInstances = [];
-let pollTimer = null;
-let abortCtrl = null;   // cancels stale requests
-let isSubmitting = false;
+        async fetchModels() {
+            try {
+                const res = await fetch('http://localhost:8000/models', { headers: { 'accept': 'application/json' } });
+                this.availableModels = await res.json();
+            } catch (error) {
+                console.error('Failed to fetch models:', error);
+            }
+        },
 
-const setCookie = (name, value, days = 7) => {
-  document.cookie = `${name}=${encodeURIComponent(value)};expires=${new Date(Date.now() + days * 864e5).toUTCString()};path=/;SameSite=Lax`;
-};
-const getCookie = (name) => document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`))?.[1] ? decodeURIComponent(RegExp.$1) : null;
-const deleteCookie = (name) => (document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 UTC;path=/;`);
+        async startSeparation() {
+            this.errorMessage = '';
+            const formData = new FormData();
 
-window.addEventListener("beforeunload", (e) => {
-  if (isSubmitting) e.preventDefault();
-});
+            if (this.inputType === 'url') {
+                if (!this.audioUrl.trim()) {
+                    this.errorMessage = 'Please enter a valid Audio URL.';
+                    return;
+                }
+                formData.append('url', this.audioUrl);
+            } else if (this.inputType === 'file') {
+                if (!this.file) {
+                    this.errorMessage = 'Please select a file to upload.';
+                    return;
+                }
+                formData.append('file', this.file);
+            }
 
-// heartbeat
-setInterval(async () => {
-  try {
-    await api.get("/ping");
-    if (!pollTimer) $("#result-container").text("Server is currently active");
-  } catch {
-    $("#result-container").text("Server disconnected");
-  }
-}, 2500);
+            formData.append('model_name', this.selectedModel);
 
-const formatTime = (s) => {
-  const pad = (n) => Math.floor(n).toString().padStart(2, "0");
-  return `${pad(s / 60)}:${pad(s % 60)}.${pad((s % 1) * 100)}`;
-};
+            try {
+                this.isProcessing = true;
+                this.jobStatus = 'uploading';
+                this.clearPlayerState();
 
-const errMsg = (err) => err.response?.data?.error || err.response?.data?.["stack-trace"] || err.message;
+                const response = await fetch('http://localhost:8000/separate', {
+                    method: 'POST',
+                    headers: { 'accept': 'application/json' },
+                    body: formData
+                });
+                
+                const data = await response.json();
 
-async function loadModels() {
-  const sel = document.getElementById("model-select");
-  try {
-    const { data } = await api.get("/api/list-models");
+                if (!response.ok) {
+                    const detail = data.detail ? JSON.stringify(data.detail) : 'Unknown server error';
+                    throw new Error(`Server responded with ${response.status}: ${detail}`);
+                }
 
-    Object.values(data?.output || {})
-      .flatMap((group) => Object.entries(group))
-      .filter(([name]) => !name.includes("VIP"))
-      .forEach(([name, m]) => {
-        // new Option(text, value)
-        sel.appendChild(new Option(name, m.filename));
+                this.jobId = data.job_id; 
+                this.jobStatus = data.status;
 
-        // Note: Use new Option(name, m.filename) if your backend still requires the filename as the selected value.
-      });
-  } catch (err) {
-    console.error("Failed to fetch models:", errMsg(err));
-    sel.innerHTML = '<option value="">Failed to load models</option>';
-  }
-}
-loadModels();
+                if (this.jobId) this.pollStatus();
+            } catch (error) {
+                console.error('Separation failed:', error);
+                this.errorMessage = error.message || 'Failed to connect to the server.';
+                this.isProcessing = false;
+                this.jobStatus = 'failed';
+            }
+        },
 
-function cleanupTracks() {
-  wavesurferInstances.forEach((ws) => ws.destroy());
-  wavesurferInstances = [];
-  $("#waveform-container").empty();
-}
+        pollStatus() {
+            const interval = setInterval(async () => {
+                try {
+                    const res = await fetch(`http://localhost:8000/status/${this.jobId}`, { headers: { 'accept': 'application/json' } });
+                    const data = await res.json();
+                    
+                    if (!res.ok) {
+                        throw new Error(data.detail ? JSON.stringify(data.detail) : 'Failed to fetch status');
+                    }
 
-function stopPolling() {
-  clearInterval(pollTimer);
-  pollTimer = null;
-  abortCtrl?.abort();
-  abortCtrl = null;
-}
+                    this.jobStatus = data.status;
+                    this.progress = data.progress || 0;
 
-function buildTracks(files, originalName, videoTitle = null) {
-  cleanupTracks();
-  if (!files.length) return;
+                    if (data.status === 'done' || data.status === 'completed') {
+                        clearInterval(interval);
+                        this.isProcessing = false;
+                        this.outputs = data.outputs || [];
+                        this.saveJobToCookies(this.jobId, this.outputs);
+                    } else if (data.status === 'failed') {
+                        clearInterval(interval);
+                        this.isProcessing = false;
+                        this.errorMessage = data.error || 'Job failed on the server.';
+                    }
+                } catch (err) {
+                    console.error('Error polling status:', err);
+                    clearInterval(interval);
+                    this.isProcessing = false;
+                    this.errorMessage = err.message || 'Connection lost while polling status.';
+                }
+            }, 3000);
+        },
 
-  $("#waveform-container").append(`
-    <div class="controls-bar">
-      <button id="play-all-btn">Play All</button>
-      <button id="stop-all-btn">Stop All</button>
-    </div>
-  `);
+        getCssVar(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        },
 
-  files.forEach((file, i) => {
-    // Extract stem name from filename (removes UUID prefix)
-    const stem = file.replace(/^[0-9a-f-]{36}_?/, "");
-    // Use video title if available, otherwise use original filename
-    let displayName = stem;
-    if (videoTitle) {
-      // Remove file extension from video title if present
-      const cleanTitle = videoTitle.replace(/\.[^/.]+$/, "");
-    } else if (originalName) {
-      const cleanName = originalName.replace(/\.[^/.]+$/, "");
-    }
-    displayName = `${stem}`;
+        clearPlayerState() {
+            this.wavesurferInstances.forEach(ws => ws && ws.destroy());
+            this.wavesurferInstances = [];
+            this.outputs = [];
+            this.playingStates = {};
+            this.currentTimes = {};
+            this.durations = {};
+        },
 
-    $("#waveform-container").append(`
-      <div class="stem-player">
-        <span id="time-${i}" class="time-display">00:00.00</span>
-        <h4 title="${displayName}">${displayName.length > 50 ? displayName.substring(0, 47) + '...' : displayName}</h4>
-        <div id="waveform-${i}"></div>
-        <button id="btn-${i}">Play / Pause</button>
-        <a href='/api/exports/${file}' download>Download</a>
-      </div>
-    `);
+        initWaveform(index, filename) {
+            const audioUrl = `http://localhost:8000/download/${this.jobId}/${filename}`;
+            
+            const ws = WaveSurfer.create({
+                container: `#waveform-${index}`,
+                url: audioUrl,
+                waveColor: this.getCssVar('--wave-color') || '#cbd5e1',
+                progressColor: this.getCssVar('--progress-color') || '#3b82f6',
+                cursorColor: this.getCssVar('--cursor-color') || '#1d4ed8',
+                barWidth: 3,
+                barGap: 2,
+                height: 60,
+                plugins: [
+                    WaveSurfer.Hover.create({ 
+                        lineColor: this.getCssVar('--hover-line-color') || '#ef4444', 
+                        lineWidth: 2, 
+                        labelBackground: this.getCssVar('--hover-bg-color') || '#1e293b', 
+                        labelColor: this.getCssVar('--hover-text-color') || '#fff', 
+                        labelSize: '11px' 
+                    })
+                ]
+            });
 
-    const ws = WaveSurfer.create({
-      container: `#waveform-${i}`,
-      waveColor: "#4F4A85",
-      progressColor: "#383351",
-      url: `/api/exports/${file}`,
-      plugins: [HoverPlugin.create({ lineColor: "#ff0000", lineWidth: 2, labelBackground: "#555", labelColor: "#fff", labelSize: "11px" })],
-    });
+            ws.on('ready', () => this.durations[index] = ws.getDuration());
+            ws.on('audioprocess', (time) => this.currentTimes[index] = time);
+            ws.on('seeking', (time) => this.currentTimes[index] = time);
+            ws.on('play', () => this.playingStates[index] = true);
+            ws.on('pause', () => this.playingStates[index] = false);
+            ws.on('finish', () => this.playingStates[index] = false);
 
-    ws.on("timeupdate", (t) => $(`#time-${i}`).text(formatTime(t)));
-    ws.on("error", (err) => console.error(`WaveSurfer error on ${file}:`, err));
-    $(`#btn-${i}`).on("click", () => ws.playPause());
-    wavesurferInstances.push(ws);
-  });
+            this.wavesurferInstances[index] = ws;
+        },
 
-  $("#play-all-btn").on("click", () => {
-    const allPlaying = wavesurferInstances.every((ws) => ws.isPlaying());
-    wavesurferInstances.forEach((ws) => (allPlaying ? ws.pause() : ws.play()));
-    $("#play-all-btn").text(allPlaying ? "Play All" : "Pause All");
-  });
+        togglePlay(index) {
+            const ws = this.wavesurferInstances[index];
+            if (ws) ws.playPause();
+        },
 
-  $("#stop-all-btn").on("click", () => {
-    wavesurferInstances.forEach((ws) => { ws.pause(); ws.seekTo(0); });
-    $("#play-all-btn").text("Play All");
-  });
-}
+        playAll() { this.wavesurferInstances.forEach(ws => ws && ws.play()); },
+        pauseAll() { this.wavesurferInstances.forEach(ws => ws && ws.pause()); },
+        resetAll() { 
+            this.wavesurferInstances.forEach(ws => {
+                if (ws) {
+                    ws.pause();
+                    ws.setTime(0);
+                }
+            }); 
+        },
+        
+        downloadTrack(filename) {
+            const url = `http://localhost:8000/download/${this.jobId}/${filename}`;
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.target = '_blank';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        },
 
-async function handleFinished(data) {
-  stopPolling();
-  $("#result-container").text("Done! (Job completed)");
-  const files = data?.result?.output_files || [];
-  const originalName = data?.result.original_filename || null;
-  const videoTitle = data?.result.video_title || null;
+        downloadAll() {
+            this.outputs.forEach(filename => this.downloadTrack(filename));
+        },
 
+        saveJobToCookies(jobId, outputs) {
+            if (!this.savedJobs.find(j => j.jobId === jobId)) {
+                this.savedJobs.unshift({ jobId, outputs });
+                if (this.savedJobs.length > 10) this.savedJobs.pop();
+                document.cookie = `audio_jobs=${encodeURIComponent(JSON.stringify(this.savedJobs))}; max-age=31536000; path=/`;
+            }
+        },
 
-  // Display video info if available
-  if (videoTitle) {
-    $("#result-container").html(`Done! (Job completed)<br><strong>Video:</strong> ${videoTitle}`);
-  }
+        async loadCookies() {
+            const match = document.cookie.match(new RegExp('(^| )audio_jobs=([^;]+)'));
+            let parsedJobs = [];
+            
+            if (match) {
+                try {
+                    parsedJobs = JSON.parse(decodeURIComponent(match[2]));
+                    if (!Array.isArray(parsedJobs)) parsedJobs = [];
+                } catch(e) {}
+            }
 
-  $("#track-title").text(videoTitle);
-  $("#track-sub").text(data?.result.file_id);
+            this.savedJobs = [];
+            
+            for (const job of parsedJobs) {
+                try {
+                    const statusRes = await fetch(`http://localhost:8000/status/${job.jobId}`, { 
+                        method: 'GET',
+                        headers: { 'accept': 'application/json' }
+                    });
+                    
+                    if (!statusRes.ok) continue;
 
-  buildTracks(files, originalName, videoTitle);
-  isSubmitting = false;
-}
+                    const data = await statusRes.json();
+                    
+                    if (data.status === 'done' || data.status === 'completed') {
+                        let outputsValid = job.outputs && job.outputs.length > 0;
 
-function pollJobStatus(jobId) {
-  stopPolling();
-  abortCtrl = new AbortController();
-  const { signal } = abortCtrl;
+                        if (outputsValid) {
+                            for (const filename of job.outputs) {
+                                const fileRes = await fetch(`http://localhost:8000/download/${job.jobId}/${filename}`, {
+                                    method: 'HEAD'
+                                });
+                                
+                                if (!fileRes.ok) {
+                                    outputsValid = false;
+                                    break;
+                                }
+                            }
+                        }
 
-  pollTimer = setInterval(async () => {
-    try {
-      const [statusRes, logRes] = await Promise.all([
-        api.get(`/api/status/${jobId}`, { signal }),
-        api.get(`/api/log-pipe?job_id=${jobId}`, { signal }), // scoped to job now
-      ]);
+                        if (outputsValid) {
+                            this.savedJobs.push(job);
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`Validation failed for job ${job.jobId}, removing from history.`);
+                }
+            }
 
-      const progress = statusRes.data?.progress;
-      const logLines = logRes.data?.lines || [];
+            document.cookie = `audio_jobs=${encodeURIComponent(JSON.stringify(this.savedJobs))}; max-age=31536000; path=/`;
+        },
 
-      // Show latest log lines
-      const logDisplay = logLines.slice(-3).join("\n"); // Show last 3 lines
-      const videoTitle = statusRes.data?.video_title || '';
+        loadSavedJob() {
+            if (!this.selectedHistoryJob) return;
+            const job = this.savedJobs.find(j => j.jobId === this.selectedHistoryJob);
+            if (job) {
+                this.clearPlayerState();
+                this.errorMessage = '';
+                this.jobId = job.jobId;
+                this.jobStatus = 'done';
+                setTimeout(() => {
+                    this.outputs = job.outputs;
+                }, 50);
+            }
+        },
 
-      let statusText = logDisplay || "Processing...";
-      if (videoTitle) {
-        statusText = `🎵 ${videoTitle}\n${statusText}`;
-      }
-      $("#result-container").text(statusText);
-
-      if (progress === "finished") {
-        await handleFinished(statusRes.data);
-      } else if (progress === "failed" || progress === "error") {
-        stopPolling();
-        $("#result-container").text(`Job failed: ${statusRes.data?.error || "unknown error"}`);
-        isSubmitting = false;
-      }
-    } catch (err) {
-      if (axios.isCancel(err)) return; // ignore aborted/stale requests
-      stopPolling();
-      console.error("Polling request failed:", err);
-      $("#result-container").text(`Polling error: ${errMsg(err)}`);
-      isSubmitting = false;
-    }
-  }, 2000);
-}
-
-async function restoreJobFromCookie() {
-  const jobId = getCookie("jobId");
-  if (!jobId) return;
-
-  try {
-    const { data } = await api.get(`/api/status/${jobId}`);
-    if (data?.progress === "finished") {
-      $("#result-container").text(`Resuming completed job ${jobId}`);
-      await handleFinished(data);
-    } else if (data?.progress === "failed" || data?.progress === "error") {
-      $("#result-container").text(`Job failed: ${data?.error || "unknown error"}`);
-    } else {
-      const videoTitle = data?.video_title || '';
-      const statusText = videoTitle ? `🎵 ${videoTitle}\nResuming monitoring...` : `Resuming monitoring of job ${jobId}...`;
-      $("#result-container").text(statusText);
-      pollJobStatus(jobId);
-    }
-  } catch (err) {
-    console.error("Failed to restore job:", err);
-    $("#result-container").text(`Failed to restore job: ${errMsg(err)}`);
-  }
-}
-document.addEventListener("DOMContentLoaded", restoreJobFromCookie);
-
-// Add visual feedback for URL input
-$("#yt-dlp-url").on("input", function () {
-  const url = $(this).val().trim();
-  const fileInput = document.getElementById("file-input");
-
-  if (url) {
-    // Show loading indicator for URL
-    $(".url-status").remove();
-    // $(this).after('<span class="url-status" style="margin-left: 10px; color: #666;">🔗 YouTube URL detected</span>');
-
-    // Optionally fetch video title preview
-    if (url.includes("youtube.com") || url.includes("youtu.be")) {
-      fetchVideoPreview(url);
-    }
-  } else {
-    $(".url-status").remove();
-  }
-});
-
-async function fetchVideoPreview(url) {
-  try {
-    const { data } = await api.post("/api/preview", { url });
-    if (data?.title) {
-      $(".url-status").text(`🎵 ${data.title}`);
-    }
-  } catch (err) {
-    // Silently fail - just use URL
-  }
-}
-
-
-// submit function 
-$("#app-form").on("submit", async function (e) {
-  e.preventDefault();
-  isSubmitting = true;
-
-  const fileInput = document.getElementById("file-input");
-  const fileSelected = fileInput?.files.length > 0;
-  const urlValue = $("#yt-dlp-url").val()?.trim();
-
-  if (!fileSelected && !urlValue) {
-    $("#result-container").text("Please provide either a local audio file or a video URL.");
-    isSubmitting = false;
-    return;
-  }
-
-  stopPolling();
-  deleteCookie("jobId");
-  cleanupTracks();
-
-  const formData = new FormData();
-  const model = $("#model-select").val();
-  if (!model) {
-    $("#result-container").text("Please select a model.");
-    isSubmitting = false;
-    return;
-  }
-  formData.append("model", model);
-
-  if (urlValue) {
-    formData.append("url", urlValue);
-    $("#result-container").text("🎵 Fetching best audio from YouTube...");
-  } else {
-    formData.append("file", fileInput.files[0]);
-    $("#result-container").text("📁 Uploading audio file...");
-  }
-
-  try {
-    const { data } = await api.post("/api/upload/", formData, {
-      timeout: 60000, // longer timeout for uploads
-      onUploadProgress: (progressEvent) => {
-        const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-        if (urlValue) {
-          $("#result-container").text(`🎵 Downloading audio... ${percent}%`);
-        } else {
-          $("#result-container").text(`📁 Uploading... ${percent}%`);
+        formatTime(seconds) {
+            const minutes = Math.floor(seconds / 60);
+            const secs = Math.floor(seconds % 60);
+            return `${minutes}:${secs < 10 ? '0' : ''}${secs}`;
         }
-      }
-    });
-
-    if (data?.status === "error") {
-      $("#result-container").text(`Error: ${data["stack-trace"] || "Submission error"}`);
-      isSubmitting = false;
-      return;
-    }
-
-    const jobId = data?.id;
-    const videoTitle = data?.video_title || null;
-    // const file_id = data?.result.file_id || null;
-
-
-    setCookie("jobId", jobId, 7);
-
-
-    const statusText = videoTitle
-      ? `🎵 ${videoTitle}\nQueued... Job ID: ${jobId}`
-      : `Queued... Job ID: ${jobId}`;
-    $("#result-container").text(statusText);
-    pollJobStatus(jobId);
-  } catch (err) {
-    console.error("Upload request failed:", err);
-    $("#result-container").text(`Error submitting data: ${errMsg(err)}`);
-    isSubmitting = false;
-  }
+    }));
 });

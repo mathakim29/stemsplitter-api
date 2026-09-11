@@ -16,10 +16,11 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 > NOTE: Ensure `nvidia-container-toolkit` is installed if running with GPU support.
 
 1. Clone this repo
-2. Run `docker compose up --build`
+2. Run `make build` followed by `make run`
+3. Run `make stop` to stop the container
 
 > NOTE: See .env file for default settings, by default is 8000
-3. The API runs on localhost:8000/api
+3. The API runs on localhost:8000
 3. Go to <a href="http://localhost:8000/demo/index.html">http://localhost:8000/demo/index.html</a> for demo app
 
 > [!WARNING]
@@ -27,14 +28,14 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 
 ## API Reference
 
-<p><strong>Base URL:</strong> <code>/api</code> | <strong>Version:</strong> <code>0.1.0</code></p>
+<p><strong>Base URL:</strong> <code>/</code> | <strong>Version:</strong> <code>0.1.0</code></p>
 
 <h3>Endpoints</h3>
 
 <!-- Endpoint 1 -->
 <details open>
-  <summary><strong><code>POST</code> /upload/</strong> - Upload Audio File</summary>
-  <p>Uploads an audio file along with an optional model selection for stem separation.</p>
+  <summary><strong><code>POST</code> /separate</strong> - Separate Audio (URL or File)</summary>
+  <p>Accepts either an audio URL or a file upload along with a model name to process stem separation.</p>
 
   <h4>Request Body (<code>multipart/form-data</code>)</h4>
   <table>
@@ -49,17 +50,24 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
     </thead>
     <tbody>
       <tr>
-        <td><code>file</code></td>
-        <td><code>file</code> (binary)</td>
-        <td><strong>Yes</strong></td>
-        <td>—</td>
-        <td>Audio file stream to upload.</td>
-      </tr>
-      <tr>
-        <td><code>model</code></td>
+        <td><code>url</code></td>
         <td><code>string</code></td>
         <td>No</td>
-        <td><code>"htdemucs.yaml"</code></td>
+        <td>—</td>
+        <td>Audio source URL (mutually exclusive with file).</td>
+      </tr>
+      <tr>
+        <td><code>file</code></td>
+        <td><code>file</code> (binary)</td>
+        <td>No</td>
+        <td>—</td>
+        <td>Audio file stream to upload (mutually exclusive with url).</td>
+      </tr>
+      <tr>
+        <td><code>model_name</code></td>
+        <td><code>string</code></td>
+        <td>No</td>
+        <td><code>"UVR-MDX-NET-Inst_HQ_3.onnx"</code></td>
         <td>Model configuration filename.</td>
       </tr>
     </tbody>
@@ -67,8 +75,8 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 
   <h4>Responses</h4>
   <ul>
-    <li><code>200 OK</code> — File uploaded and processing job created.</li>
-    <li><code>422 Unprocessable Entity</code> — Missing file or invalid form parameters.</li>
+    <li><code>200 OK</code> — Processing job created successfully.</li>
+    <li><code>422 Unprocessable Entity</code> — Invalid parameters or inputs.</li>
   </ul>
 </details>
 
@@ -77,7 +85,7 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 <!-- Endpoint 2 -->
 <details open>
   <summary><strong><code>GET</code> /status/{job_id}</strong> - Get Job Status</summary>
-  <p>Retrieves the status and metadata for a specific processing job.</p>
+  <p>Retrieves the status, progress, and resulting outputs for a specific processing job.</p>
 
   <h4>Path Parameters</h4>
   <table>
@@ -101,7 +109,7 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 
   <h4>Responses</h4>
   <ul>
-    <li><code>200 OK</code> — Returns current job status and progress details.</li>
+    <li><code>200 OK</code> — Returns current job status, progress, and outputs array.</li>
     <li><code>422 Unprocessable Entity</code> — Invalid <code>job_id</code> path parameter.</li>
   </ul>
 </details>
@@ -110,8 +118,8 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 
 <!-- Endpoint 3 -->
 <details open>
-  <summary><strong><code>GET</code> /exports/{filename}</strong> - Download Export File</summary>
-  <p>Downloads an exported file or separated stem track by name.</p>
+  <summary><strong><code>GET</code> /download/{job_id}/{filename}</strong> - Download Separated Stem</summary>
+  <p>Downloads a specific separated stem track file associated with a job.</p>
 
   <h4>Path Parameters</h4>
   <table>
@@ -125,10 +133,16 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
     </thead>
     <tbody>
       <tr>
+        <td><code>job_id</code></td>
+        <td><code>string</code></td>
+        <td><strong>Yes</strong></td>
+        <td>Unique job identifier.</td>
+      </tr>
+      <tr>
         <td><code>filename</code></td>
         <td><code>string</code></td>
         <td><strong>Yes</strong></td>
-        <td>Target filename inside the export directory.</td>
+        <td>Target filename of the stem track.</td>
       </tr>
     </tbody>
   </table>
@@ -136,7 +150,7 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
   <h4>Responses</h4>
   <ul>
     <li><code>200 OK</code> — File stream payload.</li>
-    <li><code>422 Unprocessable Entity</code> — Invalid target filename.</li>
+    <li><code>422 Unprocessable Entity</code> — Invalid path parameters.</li>
   </ul>
 </details>
 
@@ -144,13 +158,11 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 
 <!-- Endpoint 4 -->
 <details open>
-  <summary><strong><code>GET</code> /list-models</strong> - List Available Models</summary>
-  <p>Retrieves a list of available audio separation models.</p>
+  <summary><strong><code>GET</code> /models</strong> - List Available Models</summary>
+  <p>Retrieves a dictionary of available audio separation models grouped by category.</p>
 
   <h4>Responses</h4>
   <ul>
-    <li><code>200 OK</code> — Returns array of available model configurations.</li>
+    <li><code>200 OK</code> — Returns available model groupings.</li>
   </ul>
 </details>
-
-
