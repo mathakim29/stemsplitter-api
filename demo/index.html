@@ -47,13 +47,9 @@
             </div>
             
             <label>Select Model:</label>
-            <select x-model="selectedModel">
-                <template x-for="(models, category) in availableModels" :key="category">
-                    <optgroup :label="category">
-                        <template x-for="(filename, label) in models" :key="filename">
-                            <option :value="filename" x-text="label"></option>
-                        </template>
-                    </optgroup>
+            <select x-model="selectedModel" :disabled="modelList.length === 0">
+                <template x-for="model in modelList" :key="model.filename">
+                    <option :value="model.filename" x-text="model.label"></option>
                 </template>
             </select>
 

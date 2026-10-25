@@ -1,6 +1,8 @@
 import logging
+import json
 import os
 import shutil
+import subprocess
 from datetime import datetime
 from typing import Optional
 
@@ -8,6 +10,7 @@ import yt_dlp
 from fastapi import BackgroundTasks, FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, field_validator
 from audio_separator.separator import Separator
 
 from snowflake import SnowflakeGenerator
@@ -20,7 +23,7 @@ logging.basicConfig(
 logger = logging.getLogger("audio_separator_api")
 
 app = FastAPI(title="Audio Separator API")
-app.mount("/demo", StaticFiles(directory="demo"), name="demo")
+app.mount("/demo", StaticFiles(directory="demo", html=True), name="demo")
 
 OUTPUT_DIR = "/etc/asep"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -29,6 +32,34 @@ gen = SnowflakeGenerator(instance=1)
 
 # In-memory job store: {job_id: {status, progress, outputs, error, ...}}
 JOBS: dict[str, dict] = {}
+
+
+class ModelSelection(BaseModel):
+    model_name: str = "UVR-MDX-NET-Inst_HQ_3.onnx"
+
+    @field_validator("model_name")
+    @classmethod
+    def model_must_be_available(cls, value: str) -> str:
+        try:
+            result = subprocess.run(
+                ["audio-separator", "-l", "--list_format", "json"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            models = json.loads(result.stdout)
+        except (OSError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
+            raise ValueError(f"Unable to identify available models: {exc}") from exc
+
+        available = {
+            model["filename"]
+            for category in models.values()
+            for model in category.values()
+            if "filename" in model
+        }
+        if value not in available:
+            raise ValueError(f"Unknown model: {value}")
+        return value
 
 
 def new_job_id() -> str:
@@ -94,8 +125,13 @@ def health():
 
 @app.get("/models")
 def list_models():
-    sep = Separator()
-    return sep.list_supported_model_files()
+    result = subprocess.run(
+        ["audio-separator", "-l", "--list_format", "json"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(result.stdout)
 
 
 @app.post("/separate")
@@ -109,6 +145,11 @@ async def separate(
         raise HTTPException(400, "Provide either a file or a url")
     if file and url:
         raise HTTPException(400, "Provide only one of file or url")
+
+    try:
+        model_name = ModelSelection(model_name=model_name).model_name
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
     job_id = new_job_id()
     job_dir = os.path.join(OUTPUT_DIR, job_id)

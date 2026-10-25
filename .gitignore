@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.env
+.env.*
+
+# Tooling and local metadata
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Logs and generated separation output
+*.log
+asep/
+outputs/
+output/
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/
+

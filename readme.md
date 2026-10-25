@@ -9,19 +9,25 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 ## Features
 
 * Choose from multiple separation architectures (VR, MDX, Demucs, MDXC) loaded on-the-fly.
-* Working demo under /demo/index.html
+* Working demo at `/demo`
+* Model names are loaded from `audio-separator` and exposed as an enum in Swagger.
 
 
 ## Quick Start
 > NOTE: Ensure `nvidia-container-toolkit` is installed if running with GPU support.
 
-1. Clone this repo
-2. Run `make build` followed by `make run`
-3. Run `make stop` to stop the container
+1. Clone this repo.
+2. Install dependencies with `uv sync`.
+3. Start the API with `uv run uvicorn index:app --host 0.0.0.0 --port 8000`.
+
+For the GPU Docker workflow, run `make build` followed by `make run`. Run
+`make stop` to stop the container.
 
 > NOTE: See .env file for default settings, by default is 8000
-3. The API runs on localhost:8000
-3. Go to <a href="http://localhost:8000/demo/index.html">http://localhost:8000/demo/index.html</a> for demo app
+The API runs on `localhost:8000`.
+
+Open <a href="http://localhost:8000/demo">http://localhost:8000/demo</a> for the demo app.
+Swagger UI is available at <a href="http://localhost:8000/docs">http://localhost:8000/docs</a>.
 
 > [!WARNING]
 > Sometimes, the server to download the models/checkpoint will encounter downtime, and the API will fail.
@@ -67,8 +73,8 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
         <td><code>model_name</code></td>
         <td><code>string</code></td>
         <td>No</td>
-        <td><code>"UVR-MDX-NET-Inst_HQ_3.onnx"</code></td>
-        <td>Model configuration filename.</td>
+        <td><code>MDX-Net Model: UVR-MDX-NET Inst HQ 3</code></td>
+        <td>Human-readable model name from the model enum. The API maps it to the model filename internally.</td>
       </tr>
     </tbody>
   </table>
@@ -166,3 +172,9 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
     <li><code>200 OK</code> — Returns available model groupings.</li>
   </ul>
 </details>
+
+<br>
+
+<h3>Model selection</h3>
+
+<p>The API loads the model catalog with <code>audio-separator -l --list_format json</code> and exposes its human-readable model names as the <code>ModelName</code> enum in Swagger. Internally, each selected enum value is converted to its corresponding <code>filename</code> before being passed to <code>audio-separator</code>.</p>

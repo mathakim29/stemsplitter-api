@@ -4,7 +4,7 @@ document.addEventListener('alpine:init', () => {
         file: null,
         audioUrl: 'https://www.youtube.com/watch?v=B9WsjlqjYjg',
         
-        availableModels: {},
+        modelList: [],
         selectedModel: 'UVR-MDX-NET-Inst_HQ_3.onnx',
         
         isProcessing: false,
@@ -30,9 +30,23 @@ document.addEventListener('alpine:init', () => {
         async fetchModels() {
             try {
                 const res = await fetch('http://localhost:8000/models', { headers: { 'accept': 'application/json' } });
-                this.availableModels = await res.json();
+                if (!res.ok) throw new Error(`Model list request failed: ${res.status}`);
+
+                const modelCatalog = await res.json();
+                this.modelList = Object.entries(modelCatalog).flatMap(([category, models]) =>
+                    Object.entries(models).map(([label, model]) => ({
+                        category,
+                        label: `${label} (${model.filename})`,
+                        filename: label,
+                    }))
+                );
+
+                if (!this.modelList.some(model => model.filename === this.selectedModel)) {
+                    this.selectedModel = this.modelList[0]?.filename || '';
+                }
             } catch (error) {
                 console.error('Failed to fetch models:', error);
+                this.errorMessage = 'Failed to load available models.';
             }
         },
 
