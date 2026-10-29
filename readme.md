@@ -18,12 +18,14 @@ A RESTful API for audio stem separation using the <code><a href="https://github.
 
 1. Clone this repo.
 2. Install dependencies with `uv sync`.
-3. Start the API with `uv run uvicorn index:app --host 0.0.0.0 --port 8000`.
+3. Start the API with `uv run stemsplitter`.
+
+The application is exposed from `stemsplitter/__init__.py`; no `index.py` module is required. To run Uvicorn directly, use `uv run uvicorn stemsplitter:app --host 0.0.0.0 --port 8000`.
 
 For the GPU Docker workflow, run `make build` followed by `make run`. Run
 `make stop` to stop the container.
 
-> NOTE: See .env file for default settings, by default is 8000
+> NOTE: See `.env` for runtime settings. The default port is 8000.
 The API runs on `localhost:8000`.
 
 Open <a href="http://localhost:8000/demo">http://localhost:8000/demo</a> for the demo app.

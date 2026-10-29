@@ -13,6 +13,7 @@ document.addEventListener('alpine:init', () => {
         progress: 0,
         errorMessage: '',
         outputs: [],
+        logs: [],
         
         wavesurferInstances: [],
         playingStates: {},
@@ -25,6 +26,7 @@ document.addEventListener('alpine:init', () => {
         async initApp() {
             await this.loadCookies();
             await this.fetchModels();
+            this.$nextTick(() => lucide.createIcons());
         },
 
         async fetchModels() {
@@ -37,7 +39,7 @@ document.addEventListener('alpine:init', () => {
                     Object.entries(models).map(([label, model]) => ({
                         category,
                         label: `${label} (${model.filename})`,
-                        filename: label,
+                        filename: model.filename,
                     }))
                 );
 
@@ -90,6 +92,7 @@ document.addEventListener('alpine:init', () => {
 
                 this.jobId = data.job_id; 
                 this.jobStatus = data.status;
+                this.logs = data.logs || [];
 
                 if (this.jobId) this.pollStatus();
             } catch (error) {
@@ -112,6 +115,8 @@ document.addEventListener('alpine:init', () => {
 
                     this.jobStatus = data.status;
                     this.progress = data.progress || 0;
+                    this.logs = data.logs || [];
+                    this.$nextTick(() => lucide.createIcons());
 
                     if (data.status === 'done' || data.status === 'completed') {
                         clearInterval(interval);

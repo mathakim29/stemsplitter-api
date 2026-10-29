@@ -3,17 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Audio Separator Stems Player</title>
+    <title>Stemsplitter</title>
     <link rel="stylesheet" href="style.css">
     
     <!-- Scripts -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script src="https://unpkg.com/wavesurfer.js@7"></script>
     <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/hover.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
 
     <div class="container" x-data="app" x-init="initApp">
+        <header class="hero">
+            <p class="eyebrow">STEMSPLITTER / AUDIO TOOL</p>
+            <h1>Separate the signal.</h1>
+            <p class="muted">Upload a track or paste a URL. Choose a model and get clean, playable stems.</p>
+        </header>
         <!-- API Separation Control -->
         <div class="section">
             <h3>Separate Audio</h3>
@@ -28,7 +34,7 @@
                             <option :value="job.jobId" x-text="'Job: ' + job.jobId + ' (' + job.outputs.length + ' tracks)'"></option>
                         </template>
                     </select>
-                    <button @click="loadSavedJob" class="btn-secondary">Load</button>
+                    <button @click="loadSavedJob" class="btn-secondary"><i data-lucide="folder-open"></i> Load</button>
                 </div>
             </div>
 
@@ -54,8 +60,14 @@
             </select>
 
             <button @click="startSeparation" style="margin-top: 1rem;" :disabled="isProcessing">
-                <span x-text="isProcessing ? 'Processing (' + jobStatus + ' - ' + progress + '%)' : 'Start Separation'"></span>
+                <span x-show="isProcessing" class="spinner"></span><i x-show="!isProcessing" data-lucide="play"></i>
+                <span x-text="isProcessing ? jobStatus : 'Start Separation'"></span>
             </button>
+
+            <div class="terminal" x-show="logs.length" x-cloak>
+                <div class="terminal-title"><i data-lucide="terminal"></i> process output</div>
+                <pre><template x-for="line in logs"><div x-text="line"></div></template></pre>
+            </div>
 
             <!-- Server Error Display Panel -->
             <div x-show="errorMessage" x-cloak class="error-panel">
@@ -66,11 +78,11 @@
         <!-- Global Controls & Outputs -->
         <div x-show="outputs.length > 0" x-cloak>
             <div class="global-controls section">
-                <button @click="playAll">Play All</button>
-                <button @click="pauseAll" class="btn-secondary">Pause All</button>
-                <button @click="resetAll" class="btn-secondary">Reset All</button>
+                <button @click="playAll"><i data-lucide="play"></i> Play All</button>
+                <button @click="pauseAll" class="btn-secondary"><i data-lucide="pause"></i> Pause All</button>
+                <button @click="resetAll" class="btn-secondary"><i data-lucide="rotate-ccw"></i> Reset All</button>
                 <div style="flex-grow: 1;"></div>
-                <button @click="downloadAll">Download All</button>
+                <button @click="downloadAll"><i data-lucide="download"></i> Download All</button>
             </div>
 
             <!-- Render Separated Stems Dynamically -->
